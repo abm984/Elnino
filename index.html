@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Niño Watch 2026 — Global Climate Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>🌊</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0f1e;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --card: #131c30;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8eaf0;
+    --text2: #8892a4;
+    --text3: #4d5a6e;
+    --accent: #0ea5e9;
+    --accent2: #06b6d4;
+    --warm: #f59e0b;
+    --hot: #ef4444;
+    --cool: #3b82f6;
+    --green: #10b981;
+    --orange: #f97316;
+    --purple: #8b5cf6;
+    --radius: 10px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .logo span { font-size: 22px; }
+  .logo em { color: var(--accent); font-style: normal; }
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.5; transform:scale(1.3); }
+  }
+  .oni-badge {
+    background: rgba(239,68,68,0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* LAYOUT */
+  .app {
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 60px);
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-section {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+  .search-box {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--text3); }
+
+  /* Region list */
+  .region-list { display: flex; flex-direction: column; gap: 2px; }
+  .region-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+  }
+  .region-item:hover { background: var(--bg3); }
+  .region-item.active { background: rgba(14,165,233,0.12); }
+  .region-name { color: var(--text); font-weight: 500; }
+  .region-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .tag-severe { background: rgba(239,68,68,0.2); color: #fca5a5; }
+  .tag-moderate { background: rgba(245,158,11,0.2); color: #fcd34d; }
+  .tag-mild { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+  .tag-watch { background: rgba(139,92,246,0.2); color: #c4b5fd; }
+
+  /* ONI Chart mini */
+  .oni-mini { height: 70px; position: relative; }
+
+  /* CENTER: MAP */
+  .map-area {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  #world-map {
+    width: 100%;
+    height: 100%;
+  }
+  #world-map svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* TIMELINE BAR */
+  .timeline-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10,15,30,0.92);
+    border-top: 1px solid var(--border2);
+    padding: 12px 20px;
+    backdrop-filter: blur(8px);
+  }
+  .timeline-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .btn-ctrl {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-ctrl:hover { background: var(--accent); border-color: var(--accent); }
+  .btn-ctrl.playing { background: var(--accent); border-color: var(--accent); }
+  .time-display {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 120px;
+  }
+  .time-sub {
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .speed-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .speed-btn.active { background: var(--bg3); color: var(--text); border-color: var(--accent); }
+  .timeline-slider-wrap { position: relative; }
+  .month-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text3);
+    margin-bottom: 4px;
+    padding: 0 2px;
+  }
+  #timeline-slider {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 4px;
+    cursor: pointer;
+  }
+
+  /* MAP OVERLAYS */
+  .map-legend {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    background: rgba(10,15,30,0.88);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    backdrop-filter: blur(8px);
+    min-width: 160px;
+  }
+  .legend-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+  .legend-swatch {
+    width: 24px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .map-controls {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .layer-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    background: rgba(10,15,30,0.88);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+  }
+  .layer-btn.active { background: rgba(14,165,233,0.2); color: var(--accent); border-color: var(--accent); }
+  .country-tooltip {
+    position: absolute;
+    background: rgba(10,15,30,0.95);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 10;
+    min-width: 180px;
+    backdrop-filter: blur(8px);
+  }
+  .tooltip-country { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .tooltip-row { display: flex; justify-content: space-between; gap: 20px; color: var(--text2); margin-bottom: 2px; }
+  .tooltip-val { color: var(--text); font-weight: 500; }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .r-section {
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .r-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+  }
+  .stat-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; }
+  .stat-val { font-size: 18px; font-weight: 700; color: var(--text); }
+  .stat-val.hot { color: var(--hot); }
+  .stat-val.warm { color: var(--warm); }
+  .stat-val.cool { color: var(--cool); }
+  .stat-val.green { color: var(--green); }
+  .stat-sub { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* Remedies */
+  .remedy-list { display: flex; flex-direction: column; gap: 8px; }
+  .remedy-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .remedy-card:hover { border-color: var(--border2); }
+  .remedy-card.expanded { border-color: var(--accent); }
+  .remedy-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .remedy-icon { font-size: 16px; }
+  .remedy-body {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 7px;
+    line-height: 1.6;
+    display: none;
+  }
+  .remedy-card.expanded .remedy-body { display: block; }
+
+  /* ONI Index gauge */
+  .oni-gauge-wrap { display: flex; align-items: center; gap: 14px; }
+  .oni-gauge {
+    flex: 1;
+    height: 8px;
+    background: linear-gradient(to right, #3b82f6, #22c55e, #f59e0b, #ef4444);
+    border-radius: 4px;
+    position: relative;
+  }
+  .oni-needle {
+    position: absolute;
+    top: -4px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    transform: translateX(-50%);
+    transition: left 0.5s ease;
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  }
+  .oni-val {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--hot);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* Alert ticker */
+  .alert-ticker {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .ticker-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .ticker-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(239,68,68,0.1);
+    font-size: 11px;
+  }
+  .ticker-item:last-child { border-bottom: none; }
+  .ticker-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+  .ticker-text { color: var(--text2); line-height: 1.5; }
+  .ticker-region { color: var(--text); font-weight: 600; }
+
+  /* Chart area */
+  .chart-wrap { height: 120px; position: relative; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+    .left-panel, .right-panel { display: none; }
+    .map-area { height: 60vh; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* Loading */
+  .loading-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 999;
+    gap: 16px;
+    transition: opacity 0.5s;
+  }
+  .loading-screen.hidden { opacity: 0; pointer-events: none; }
+  .loading-wave {
+    font-size: 48px;
+    animation: wave 1.5s ease-in-out infinite;
+  }
+  @keyframes wave {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  .loading-text { color: var(--text2); font-size: 14px; }
+  .loading-bar-wrap {
+    width: 200px; height: 3px;
+    background: var(--border2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .loading-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    animation: load 2s ease forwards;
+  }
+  @keyframes load { from { width: 0; } to { width: 100%; } }
+
+  .weather-live-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .weather-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--bg3);
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .weather-loc { color: var(--text2); }
+  .weather-temp { font-weight: 600; color: var(--warm); }
+  .weather-cond { font-size: 10px; color: var(--text3); }
+
+  .impact-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .impact-row:last-child { border-bottom: none; }
+  .impact-bar-wrap { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; }
+  .impact-bar { height: 100%; border-radius: 2px; }
+  .impact-name { color: var(--text2); min-width: 90px; }
+  .impact-pct { color: var(--text); font-weight: 500; min-width: 30px; text-align: right; }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-screen" id="loading">
+  <div class="loading-wave">🌊</div>
+  <div style="font-size:18px;font-weight:600;color:var(--text)">El Niño Watch 2026</div>
+  <div class="loading-text">Loading global climate data...</div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <span>🌊</span>
+    El Niño Watch <em>2026</em>
+  </div>
+  <div class="header-status">
+    <div class="live-dot"></div>
+    <span>Live ENSO Data</span>
+    &nbsp;·&nbsp;
+    <span id="current-date-display">Jan 2026</span>
+    &nbsp;·&nbsp;
+    <span class="oni-badge">ONI +1.8°C — El Niño Active</span>
+  </div>
+</header>
+
+<!-- APP GRID -->
+<div class="app">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-label">Search Region / Country</div>
+      <input class="search-box" id="search-input" type="text" placeholder="e.g. Indonesia, South Asia…" autocomplete="off">
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">ONI Index (Oceanic Niño Index)</div>
+      <div class="oni-gauge-wrap" style="margin-bottom:10px;">
+        <div class="oni-gauge">
+          <div class="oni-needle" id="oni-needle" style="left:75%"></div>
+        </div>
+        <div class="oni-val" id="oni-display">+1.8</div>
+      </div>
+      <div class="oni-mini">
+        <canvas id="oni-chart" aria-label="ONI index trend for 2026" role="img">ONI index showing El Niño conditions throughout 2026</canvas>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px;">
+        <span>La Niña ← –2.0</span>
+        <span style="color:var(--text2)">Neutral</span>
+        <span>+2.0 → El Niño</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Most Affected Regions</div>
+      <div class="region-list" id="region-list"></div>
+    </div>
+
+    <div class="panel-section" style="flex:1">
+      <div class="panel-label">Layer Toggle</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="layer-temp" checked style="accent-color:var(--accent)"> Temperature Anomaly
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="layer-drought" checked style="accent-color:var(--accent)"> Drought Risk
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="layer-flood" checked style="accent-color:var(--accent)"> Flood Risk
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer;">
+          <input type="checkbox" id="layer-fire" style="accent-color:var(--accent)"> Wildfire Risk
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: MAP -->
+  <div class="map-area">
+    <!-- Map legend -->
+    <div class="map-legend">
+      <div class="legend-title">Temperature Anomaly</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#1d4ed8"></div> &lt; −2°C (cooling)</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#93c5fd"></div> −1 to −2°C</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#d1fae5"></div> Near normal</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#fbbf24"></div> +1 to +2°C</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#f97316"></div> +2 to +3°C</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#dc2626"></div> &gt; +3°C (severe)</div>
+    </div>
+
+    <!-- Map div -->
+    <div id="world-map"></div>
+
+    <!-- Country tooltip -->
+    <div class="country-tooltip" id="tooltip">
+      <div class="tooltip-country" id="tt-country">—</div>
+      <div class="tooltip-row"><span>Temp. Anomaly</span><span class="tooltip-val" id="tt-temp">—</span></div>
+      <div class="tooltip-row"><span>El Niño Impact</span><span class="tooltip-val" id="tt-impact">—</span></div>
+      <div class="tooltip-row"><span>Main Risk</span><span class="tooltip-val" id="tt-risk">—</span></div>
+      <div class="tooltip-row"><span>Population at Risk</span><span class="tooltip-val" id="tt-pop">—</span></div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline-bar">
+      <div class="timeline-controls">
+        <button class="btn-ctrl" id="btn-rewind" title="Rewind to January">⏮</button>
+        <button class="btn-ctrl" id="btn-prev" title="Previous month">◀</button>
+        <button class="btn-ctrl" id="btn-play" title="Play/Pause">▶</button>
+        <button class="btn-ctrl" id="btn-next" title="Next month">▶</button>
+        <button class="btn-ctrl" id="btn-fwd" title="Jump to December">⏭</button>
+        <div>
+          <div class="time-display" id="month-label">January 2026</div>
+          <div class="time-sub" id="phase-label">El Niño — Peak Phase</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:11px;color:var(--text3)">Speed:</div>
+        <button class="speed-btn" data-speed="2000">0.5×</button>
+        <button class="speed-btn active" data-speed="1000">1×</button>
+        <button class="speed-btn" data-speed="500">2×</button>
+        <button class="speed-btn" data-speed="200">5×</button>
+      </div>
+      <div class="timeline-slider-wrap">
+        <div class="month-labels">
+          <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span>
+          <span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span>
+          <span>Nov</span><span>Dec</span>
+        </div>
+        <input type="range" id="timeline-slider" min="0" max="11" value="0" step="1">
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <!-- Global stats -->
+    <div class="r-section">
+      <div class="r-title">Global Snapshot — <span id="stats-month">Jan 2026</span></div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">ONI Index</div>
+          <div class="stat-val hot" id="r-oni">+1.8°C</div>
+          <div class="stat-sub">El Niño Active</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Countries Affected</div>
+          <div class="stat-val warm" id="r-countries">67</div>
+          <div class="stat-sub">Across 6 continents</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pop. at Risk</div>
+          <div class="stat-val" id="r-pop" style="font-size:15px;">2.1B</div>
+          <div class="stat-sub">People exposed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Drought Zones</div>
+          <div class="stat-val warm" id="r-drought">38</div>
+          <div class="stat-sub">Active regions</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live weather feed -->
+    <div class="r-section">
+      <div class="r-title">🔴 Live Weather Feed</div>
+      <div class="weather-live-wrap" id="live-weather">
+        <div class="weather-row">
+          <div><div class="weather-loc">Jakarta, Indonesia</div><div class="weather-cond">Extreme drought</div></div>
+          <div class="weather-temp">+3.1°C</div>
+        </div>
+        <div class="weather-row">
+          <div><div class="weather-loc">São Paulo, Brazil</div><div class="weather-cond">Heavy rainfall</div></div>
+          <div class="weather-temp">+2.4°C</div>
+        </div>
+        <div class="weather-row">
+          <div><div class="weather-loc">Sydney, Australia</div><div class="weather-cond">Severe drought</div></div>
+          <div class="weather-temp">+2.8°C</div>
+        </div>
+        <div class="weather-row">
+          <div><div class="weather-loc">Mumbai, India</div><div class="weather-cond">Below normal rain</div></div>
+          <div class="weather-temp">+1.9°C</div>
+        </div>
+        <div class="weather-row">
+          <div><div class="weather-loc">Nairobi, Kenya</div><div class="weather-cond">Flooding risk</div></div>
+          <div class="weather-temp">+1.6°C</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center;">
+        Simulated ENSO anomaly data · Updated model
+      </div>
+    </div>
+
+    <!-- Impact breakdown -->
+    <div class="r-section">
+      <div class="r-title">Impact Breakdown</div>
+      <div id="impact-bars">
+        <div class="impact-row">
+          <span class="impact-name">Drought</span>
+          <div class="impact-bar-wrap"><div class="impact-bar" style="width:72%;background:#f97316"></div></div>
+          <span class="impact-pct">72%</span>
+        </div>
+        <div class="impact-row">
+          <span class="impact-name">Flooding</span>
+          <div class="impact-bar-wrap"><div class="impact-bar" style="width:58%;background:#3b82f6"></div></div>
+          <span class="impact-pct">58%</span>
+        </div>
+        <div class="impact-row">
+          <span class="impact-name">Wildfire</span>
+          <div class="impact-bar-wrap"><div class="impact-bar" style="width:44%;background:#ef4444"></div></div>
+          <span class="impact-pct">44%</span>
+        </div>
+        <div class="impact-row">
+          <span class="impact-name">Food shortage</span>
+          <div class="impact-bar-wrap"><div class="impact-bar" style="width:61%;background:#f59e0b"></div></div>
+          <span class="impact-pct">61%</span>
+        </div>
+        <div class="impact-row">
+          <span class="impact-name">Disease risk</span>
+          <div class="impact-bar-wrap"><div class="impact-bar" style="width:37%;background:#8b5cf6"></div></div>
+          <span class="impact-pct">37%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safety Remedies -->
+    <div class="r-section">
+      <div class="r-title">🛡 Safety Remedies</div>
+      <div class="remedy-list" id="remedy-list"></div>
+    </div>
+
+    <!-- Forecast chart -->
+    <div class="r-section">
+      <div class="r-title">ONI Forecast — Full Year</div>
+      <div class="chart-wrap">
+        <canvas id="forecast-chart" role="img" aria-label="ONI index forecast for all months of 2026">El Niño ONI forecast: peaks in early 2026 and gradually weakens toward end of year.</canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA MODEL
+// ============================================================
+
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ONI index predictions for 2026 (El Niño weakening through year)
+const ONI_2026 = [1.8, 1.6, 1.4, 1.1, 0.8, 0.6, 0.5, 0.3, 0.2, 0.1, -0.1, -0.3];
+
+// Phase labels
+function getPhase(oni) {
+  if (oni >= 1.5) return 'El Niño — Strong Phase';
+  if (oni >= 0.5) return 'El Niño — Moderate Phase';
+  if (oni >= 0.3) return 'El Niño — Weak Phase';
+  if (oni >= -0.3) return 'ENSO — Neutral Conditions';
+  if (oni >= -0.5) return 'La Niña — Developing';
+  return 'La Niña Active';
+}
+
+// Country El Niño impact data (numeric ID from world-atlas, name, temp anomaly per month)
+// Temperature anomaly follows ONI scaling
+const COUNTRY_DATA = {
+  // Southeast Asia — very severe
+  'Indonesia': { id: '360', temp: 3.1, impact: 'Extreme', risk: 'Severe Drought', pop: '270M', color: '#dc2626' },
+  'Philippines': { id: '608', temp: 2.8, impact: 'Extreme', risk: 'Drought & Fire', pop: '110M', color: '#dc2626' },
+  'Papua New Guinea': { id: '598', temp: 2.9, impact: 'Extreme', risk: 'Drought & Famine', pop: '9M', color: '#dc2626' },
+  'Malaysia': { id: '458', temp: 2.4, impact: 'Severe', risk: 'Drought', pop: '32M', color: '#f97316' },
+  'Thailand': { id: '764', temp: 1.9, impact: 'Severe', risk: 'Drought & Flood', pop: '70M', color: '#f97316' },
+  'Vietnam': { id: '704', temp: 1.7, impact: 'Moderate', risk: 'Flooding', pop: '95M', color: '#f59e0b' },
+  'Myanmar': { id: '104', temp: 1.5, impact: 'Moderate', risk: 'Drought', pop: '54M', color: '#f59e0b' },
+  'Cambodia': { id: '116', temp: 2.0, impact: 'Severe', risk: 'Drought', pop: '17M', color: '#f97316' },
+  'Laos': { id: '418', temp: 1.8, impact: 'Moderate', risk: 'Drought', pop: '7M', color: '#f59e0b' },
+  // Australia
+  'Australia': { id: '036', temp: 2.8, impact: 'Extreme', risk: 'Drought & Wildfire', pop: '26M', color: '#dc2626' },
+  // South Asia
+  'India': { id: '356', temp: 1.9, impact: 'Severe', risk: 'Erratic Monsoon', pop: '1.4B', color: '#f97316' },
+  'Sri Lanka': { id: '144', temp: 1.7, impact: 'Moderate', risk: 'Drought', pop: '22M', color: '#f59e0b' },
+  'Pakistan': { id: '586', temp: 1.4, impact: 'Moderate', risk: 'Heat & Drought', pop: '220M', color: '#f59e0b' },
+  // South America
+  'Peru': { id: '604', temp: 2.5, impact: 'Severe', risk: 'Flooding & Landslides', pop: '33M', color: '#f97316' },
+  'Ecuador': { id: '218', temp: 2.9, impact: 'Extreme', risk: 'Coastal Flooding', pop: '18M', color: '#dc2626' },
+  'Colombia': { id: '170', temp: 1.6, impact: 'Moderate', risk: 'Drought', pop: '52M', color: '#f59e0b' },
+  'Brazil': { id: '076', temp: 1.2, impact: 'Moderate', risk: 'Flooding in South', pop: '214M', color: '#f59e0b' },
+  'Bolivia': { id: '068', temp: 1.8, impact: 'Moderate', risk: 'Drought', pop: '12M', color: '#f59e0b' },
+  'Chile': { id: '152', temp: 1.5, impact: 'Moderate', risk: 'Heavy Rainfall', pop: '19M', color: '#f59e0b' },
+  'Argentina': { id: '032', temp: 0.9, impact: 'Mild', risk: 'Seasonal Variability', pop: '45M', color: '#fbbf24' },
+  // Africa
+  'Ethiopia': { id: '231', temp: 1.3, impact: 'Moderate', risk: 'Drought & Famine', pop: '120M', color: '#f59e0b' },
+  'Somalia': { id: '706', temp: 1.6, impact: 'Severe', risk: 'Drought & Flood', pop: '17M', color: '#f97316' },
+  'Kenya': { id: '404', temp: 1.2, impact: 'Moderate', risk: 'Flooding', pop: '56M', color: '#f59e0b' },
+  'South Africa': { id: '710', temp: 1.1, impact: 'Mild', risk: 'Drought', pop: '60M', color: '#fbbf24' },
+  'Zimbabwe': { id: '716', temp: 1.5, impact: 'Moderate', risk: 'Drought & Food Crisis', pop: '16M', color: '#f59e0b' },
+  'Madagascar': { id: '450', temp: 1.4, impact: 'Moderate', risk: 'Cyclone Risk', pop: '28M', color: '#f59e0b' },
+  'Tanzania': { id: '834', temp: 1.0, impact: 'Mild', risk: 'Erratic Rainfall', pop: '63M', color: '#fbbf24' },
+  // Central America / Caribbean
+  'Guatemala': { id: '320', temp: 1.6, impact: 'Moderate', risk: 'Drought & Wildfires', pop: '18M', color: '#f59e0b' },
+  'Honduras': { id: '340', temp: 1.7, impact: 'Moderate', risk: 'Drought', pop: '10M', color: '#f59e0b' },
+  'Nicaragua': { id: '558', temp: 1.5, impact: 'Moderate', risk: 'Drought', pop: '7M', color: '#f59e0b' },
+  'Mexico': { id: '484', temp: 1.1, impact: 'Mild', risk: 'N/Pacific Hurricane Season', pop: '130M', color: '#fbbf24' },
+  // Pacific
+  'Fiji': { id: '242', temp: 1.2, impact: 'Mild', risk: 'Coral Bleaching', pop: '0.9M', color: '#fbbf24' },
+  'Vanuatu': { id: '548', temp: 1.5, impact: 'Moderate', risk: 'Cyclone Risk', pop: '0.3M', color: '#f59e0b' },
+  // USA
+  'United States of America': { id: '840', temp: 0.6, impact: 'Mild', risk: 'Wet South, Dry N.W.', pop: '330M', color: '#fbbf24' },
+  // near normal
+  'China': { id: '156', temp: 0.4, impact: 'Minimal', risk: 'Regional Variability', pop: '1.4B', color: '#d1fae5' },
+  'Russia': { id: '643', temp: -0.2, impact: 'Minimal', risk: 'Near Normal', pop: '145M', color: '#93c5fd' },
+  'Canada': { id: '124', temp: 0.3, impact: 'Minimal', risk: 'Mild Variability', pop: '38M', color: '#d1fae5' },
+};
+
+const REGIONS = [
+  { name: 'Southeast Asia', tag: 'Severe', cls: 'tag-severe', oni: '+2.8', countries: ['Indonesia','Philippines','Malaysia','Thailand','Vietnam','Myanmar','Cambodia','Laos','Papua New Guinea'] },
+  { name: 'Australia & Pacific', tag: 'Severe', cls: 'tag-severe', oni: '+2.5', countries: ['Australia','Fiji','Vanuatu'] },
+  { name: 'South America (W)', tag: 'Severe', cls: 'tag-severe', oni: '+2.2', countries: ['Peru','Ecuador','Colombia','Bolivia'] },
+  { name: 'South Asia', tag: 'Moderate', cls: 'tag-moderate', oni: '+1.7', countries: ['India','Pakistan','Sri Lanka'] },
+  { name: 'East Africa', tag: 'Moderate', cls: 'tag-moderate', oni: '+1.3', countries: ['Kenya','Ethiopia','Somalia','Tanzania','Madagascar'] },
+  { name: 'Central America', tag: 'Moderate', cls: 'tag-moderate', oni: '+1.5', countries: ['Guatemala','Honduras','Nicaragua','Mexico'] },
+  { name: 'Southern Africa', tag: 'Mild', cls: 'tag-mild', oni: '+1.1', countries: ['South Africa','Zimbabwe'] },
+  { name: 'N. America', tag: 'Watch', cls: 'tag-watch', oni: '+0.6', countries: ['United States of America','Canada'] },
+];
+
+const REMEDIES = [
+  { icon: '💧', title: 'Water Conservation', body: 'Store rainwater during wet periods. Fix all leaks. Use drip irrigation. Limit lawn watering. Harvest rooftop rainwater into tanks.' },
+  { icon: '🌾', title: 'Food & Agriculture Safety', body: 'Plant drought-resistant crop varieties. Diversify food sources. Build household food reserves (2–4 weeks). Support local cooperative farming.' },
+  { icon: '🌡️', title: 'Heat Safety', body: 'Stay hydrated (3L/day minimum). Avoid outdoor activity 11am–3pm. Use wet towels and fans. Watch for heat stroke signs: confusion, no sweating, hot skin.' },
+  { icon: '🔥', title: 'Wildfire Preparedness', body: 'Create a 30-foot ember-resistant zone around homes. Prepare a go-bag. Know evacuation routes. Monitor fire weather warnings daily.' },
+  { icon: '🌊', title: 'Flood Safety', body: 'Never walk through moving water. Move valuables and documents to higher floors. Know your elevation level. Follow official evacuation orders immediately.' },
+  { icon: '🦟', title: 'Disease Prevention', body: 'Eliminate standing water (mosquito breeding). Use bed nets. Store clean drinking water. Watch for cholera/dengue outbreak announcements in your area.' },
+  { icon: '⚡', title: 'Emergency Preparedness', body: 'Keep emergency kit: flashlight, batteries, first aid, 3-day water supply, medications, cash, documents. Register with local emergency services.' },
+  { icon: '📡', title: 'Stay Informed', body: 'Follow official ENSO forecasts (NOAA, CPC). Set up emergency alerts on your phone. Share forecasts with community members, especially elderly.' },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let currentMonth = 0;
+let playing = false;
+let playInterval = null;
+let playSpeed = 1000;
+let worldData = null;
+let mapSvg = null;
+let projection = null;
+let pathGen = null;
+
+// ============================================================
+// BUILD LEFT PANEL — Regions
+// ============================================================
+function buildRegions() {
+  const list = document.getElementById('region-list');
+  REGIONS.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'region-item' + (i === 0 ? ' active' : '');
+    div.innerHTML = `<span class="region-name">${r.name}</span><span class="region-tag ${r.cls}">${r.tag}</span>`;
+    div.addEventListener('click', () => {
+      document.querySelectorAll('.region-item').forEach(x => x.classList.remove('active'));
+      div.classList.add('active');
+      highlightRegion(r.countries);
+    });
+    list.appendChild(div);
+  });
+}
+
+// Search
+document.getElementById('search-input').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('.region-item').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+// ============================================================
+// BUILD RIGHT PANEL — Remedies
+// ============================================================
+function buildRemedies() {
+  const list = document.getElementById('remedy-list');
+  REMEDIES.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'remedy-card';
+    div.innerHTML = `
+      <div class="remedy-header">
+        <span class="remedy-icon">${r.icon}</span>
+        <span>${r.title}</span>
+      </div>
+      <div class="remedy-body">${r.body}</div>
+    `;
+    div.addEventListener('click', () => div.classList.toggle('expanded'));
+    list.appendChild(div);
+  });
+}
+
+// ============================================================
+// MAP
+// ============================================================
+function getCountryColor(name, monthIdx) {
+  const oni = ONI_2026[monthIdx];
+  const scale = oni / 1.8; // normalize to peak
+  const d = COUNTRY_DATA[name];
+  if (!d) return '#1a2235';
+  const t = d.temp * scale;
+  if (t >= 2.5) return '#dc2626';
+  if (t >= 1.8) return '#f97316';
+  if (t >= 1.2) return '#f59e0b';
+  if (t >= 0.6) return '#fbbf24';
+  if (t >= 0.2) return '#d1fae5';
+  if (t >= -0.5) return '#93c5fd';
+  return '#1d4ed8';
+}
+
+async function initMap() {
+  const container = document.getElementById('world-map');
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 500;
+
+  const svg = d3.select('#world-map')
+    .append('svg')
+    .attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  mapSvg = svg;
+
+  projection = d3.geoNaturalEarth1()
+    .scale(W / 6.3)
+    .translate([W / 2, H / 2]);
+
+  pathGen = d3.geoPath(projection);
+
+  // Ocean background
+  svg.append('rect')
+    .attr('width', W).attr('height', H)
+    .attr('fill', '#0c1829');
+
+  // Graticule
+  const graticule = d3.geoGraticule()();
+  svg.append('path')
+    .datum(graticule)
+    .attr('d', pathGen)
+    .attr('fill', 'none')
+    .attr('stroke', 'rgba(255,255,255,0.04)')
+    .attr('stroke-width', 0.5);
+
+  try {
+    worldData = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+  } catch(e) {
+    console.error('Map data failed:', e);
+    return;
+  }
+
+  const countries = topojson.feature(worldData, worldData.objects.countries);
+
+  // Build a name lookup from numeric IDs
+  const idToName = {};
+  Object.entries(COUNTRY_DATA).forEach(([name, d]) => {
+    // Map by rough id matching
+    idToName[d.id] = name;
+  });
+
+  const tooltip = document.getElementById('tooltip');
+
+  svg.selectAll('.country')
+    .data(countries.features)
+    .join('path')
+    .attr('class', 'country')
+    .attr('d', pathGen)
+    .attr('fill', d => {
+      const name = getCountryName(d.id);
+      return getCountryColor(name, 0);
+    })
+    .attr('stroke', 'rgba(255,255,255,0.12)')
+    .attr('stroke-width', 0.4)
+    .style('cursor', 'pointer')
+    .on('mousemove', function(event, d) {
+      const name = getCountryName(d.id);
+      const data = COUNTRY_DATA[name];
+      const oni = ONI_2026[currentMonth];
+      const scale = oni / 1.8;
+      const [mx, my] = d3.pointer(event, container);
+
+      tooltip.style.opacity = '1';
+      tooltip.style.left = Math.min(mx + 14, container.clientWidth - 200) + 'px';
+      tooltip.style.top = Math.max(my - 80, 8) + 'px';
+
+      document.getElementById('tt-country').textContent = name || `Region ${d.id}`;
+      if (data) {
+        const t = (data.temp * scale).toFixed(1);
+        document.getElementById('tt-temp').textContent = `+${t}°C`;
+        document.getElementById('tt-impact').textContent = data.impact;
+        document.getElementById('tt-risk').textContent = data.risk;
+        document.getElementById('tt-pop').textContent = data.pop;
+      } else {
+        document.getElementById('tt-temp').textContent = 'Near normal';
+        document.getElementById('tt-impact').textContent = 'Minimal';
+        document.getElementById('tt-risk').textContent = 'Low';
+        document.getElementById('tt-pop').textContent = '—';
+      }
+    })
+    .on('mouseleave', () => { tooltip.style.opacity = '0'; });
+
+  // Country borders mesh
+  svg.append('path')
+    .datum(topojson.mesh(worldData, worldData.objects.countries, (a, b) => a !== b))
+    .attr('d', pathGen)
+    .attr('fill', 'none')
+    .attr('stroke', 'rgba(255,255,255,0.08)')
+    .attr('stroke-width', 0.5);
+}
+
+// Rough country name from numeric world-atlas IDs
+function getCountryName(numId) {
+  const id = String(numId).padStart(3, '0');
+  for (const [name, data] of Object.entries(COUNTRY_DATA)) {
+    if (data.id === id) return name;
+  }
+  return null;
+}
+
+function highlightRegion(countries) {
+  if (!mapSvg) return;
+  mapSvg.selectAll('.country')
+    .attr('stroke', d => {
+      const name = getCountryName(d.id);
+      return countries.includes(name) ? '#fff' : 'rgba(255,255,255,0.12)';
+    })
+    .attr('stroke-width', d => {
+      const name = getCountryName(d.id);
+      return countries.includes(name) ? 1.5 : 0.4;
+    });
+}
+
+function updateMapColors(monthIdx) {
+  if (!mapSvg) return;
+  mapSvg.selectAll('.country')
+    .transition().duration(400)
+    .attr('fill', d => {
+      const name = getCountryName(d.id);
+      return getCountryColor(name, monthIdx);
+    });
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+function initOniMiniChart() {
+  const ctx = document.getElementById('oni-chart');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: MONTHS_SHORT,
+      datasets: [{
+        data: ONI_2026,
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239,68,68,0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 2,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          display: true,
+          min: -0.5, max: 2.2,
+          ticks: { color: '#4d5a6e', font: { size: 9 }, maxTicksLimit: 4 },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+        }
+      },
+      animation: false,
+    }
+  });
+}
+
+function initForecastChart() {
+  const ctx = document.getElementById('forecast-chart');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: MONTHS_SHORT,
+      datasets: [
+        {
+          label: 'ONI Forecast',
+          data: ONI_2026,
+          backgroundColor: ONI_2026.map(v => v >= 1.5 ? '#dc2626' : v >= 0.5 ? '#f97316' : v >= 0 ? '#fbbf24' : '#3b82f6'),
+          borderRadius: 3,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `ONI: ${ctx.raw > 0 ? '+' : ''}${ctx.raw}°C`
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#4d5a6e', font: { size: 9 } }, grid: { display: false } },
+        y: {
+          min: -0.5, max: 2.2,
+          ticks: { color: '#4d5a6e', font: { size: 9 }, maxTicksLimit: 5,
+                   callback: v => (v > 0 ? '+' : '') + v },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+        }
+      }
+    }
+  });
+}
+
+// ============================================================
+// TIMELINE
+// ============================================================
+function updateTimeline(monthIdx) {
+  currentMonth = monthIdx;
+  const oni = ONI_2026[monthIdx];
+  const scale = (oni / 1.8);
+
+  document.getElementById('timeline-slider').value = monthIdx;
+  document.getElementById('month-label').textContent = MONTHS[monthIdx] + ' 2026';
+  document.getElementById('phase-label').textContent = getPhase(oni);
+  document.getElementById('current-date-display').textContent = MONTHS_SHORT[monthIdx] + ' 2026';
+  document.getElementById('stats-month').textContent = MONTHS_SHORT[monthIdx] + ' 2026';
+
+  // ONI display
+  const oniStr = (oni >= 0 ? '+' : '') + oni.toFixed(1);
+  document.getElementById('oni-display').textContent = oniStr;
+  document.getElementById('r-oni').textContent = oniStr + '°C';
+  document.getElementById('oni-needle').style.left = ((oni + 2) / 4 * 100) + '%';
+
+  // Scale stats
+  const cAffected = Math.round(67 * Math.max(0.3, scale));
+  const pop = (2.1 * Math.max(0.3, scale)).toFixed(1);
+  const drought = Math.round(38 * Math.max(0.3, scale));
+  document.getElementById('r-countries').textContent = cAffected;
+  document.getElementById('r-pop').textContent = pop + 'B';
+  document.getElementById('r-drought').textContent = drought;
+
+  updateMapColors(monthIdx);
+}
+
+document.getElementById('timeline-slider').addEventListener('input', function() {
+  updateTimeline(parseInt(this.value));
+});
+
+document.getElementById('btn-play').addEventListener('click', function() {
+  playing = !playing;
+  this.textContent = playing ? '⏸' : '▶';
+  this.classList.toggle('playing', playing);
+  if (playing) {
+    if (currentMonth >= 11) updateTimeline(0);
+    playInterval = setInterval(() => {
+      if (currentMonth >= 11) {
+        clearInterval(playInterval);
+        playing = false;
+        document.getElementById('btn-play').textContent = '▶';
+        document.getElementById('btn-play').classList.remove('playing');
+        return;
+      }
+      updateTimeline(currentMonth + 1);
+    }, playSpeed);
+  } else {
+    clearInterval(playInterval);
+  }
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  if (currentMonth > 0) updateTimeline(currentMonth - 1);
+});
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (currentMonth < 11) updateTimeline(currentMonth + 1);
+});
+document.getElementById('btn-rewind').addEventListener('click', () => updateTimeline(0));
+document.getElementById('btn-fwd').addEventListener('click', () => updateTimeline(11));
+
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    playSpeed = parseInt(this.dataset.speed);
+    if (playing) {
+      clearInterval(playInterval);
+      playInterval = setInterval(() => {
+        if (currentMonth >= 11) {
+          clearInterval(playInterval);
+          playing = false;
+          return;
+        }
+        updateTimeline(currentMonth + 1);
+      }, playSpeed);
+    }
+  });
+});
+
+// Layer checkboxes (visual feedback)
+['layer-temp', 'layer-drought', 'layer-flood', 'layer-fire'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => updateMapColors(currentMonth));
+});
+
+// ============================================================
+// LIVE WEATHER TICKER (simulated rotation)
+// ============================================================
+const WEATHER_CITIES = [
+  { city: 'Jakarta, Indonesia', cond: 'Extreme drought', anomaly: '+3.1°C' },
+  { city: 'São Paulo, Brazil', cond: 'Heavy rainfall', anomaly: '+2.4°C' },
+  { city: 'Sydney, Australia', cond: 'Severe drought', anomaly: '+2.8°C' },
+  { city: 'Mumbai, India', cond: 'Below normal monsoon', anomaly: '+1.9°C' },
+  { city: 'Nairobi, Kenya', cond: 'Flash flood risk', anomaly: '+1.6°C' },
+  { city: 'Lima, Peru', cond: 'Coastal flooding', anomaly: '+2.7°C' },
+  { city: 'Manila, Philippines', cond: 'Drought & haze', anomaly: '+2.5°C' },
+  { city: 'Harare, Zimbabwe', cond: 'Severe drought', anomaly: '+1.5°C' },
+  { city: 'Bogotá, Colombia', cond: 'Reduced rainfall', anomaly: '+1.4°C' },
+  { city: 'Port Moresby, PNG', cond: 'Extreme heat & drought', anomaly: '+3.0°C' },
+  { city: 'Bangkok, Thailand', cond: 'Drought conditions', anomaly: '+2.0°C' },
+  { city: 'Quito, Ecuador', cond: 'Severe coastal flood', anomaly: '+2.9°C' },
+];
+let wxIdx = 0;
+setInterval(() => {
+  const container = document.getElementById('live-weather');
+  const rows = container.querySelectorAll('.weather-row');
+  wxIdx = (wxIdx + 5) % WEATHER_CITIES.length;
+  rows.forEach((row, i) => {
+    const city = WEATHER_CITIES[(wxIdx + i) % WEATHER_CITIES.length];
+    row.querySelector('.weather-loc').textContent = city.city;
+    row.querySelector('.weather-cond').textContent = city.cond;
+    row.querySelector('.weather-temp').textContent = city.anomaly;
+  });
+}, 5000);
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  buildRegions();
+  buildRemedies();
+  initOniMiniChart();
+  initForecastChart();
+  await initMap();
+  updateTimeline(0);
+
+  // Hide loading
+  setTimeout(() => {
+    document.getElementById('loading').classList.add('hidden');
+  }, 2200);
+}
+
+init();
+</script>
+</body>
+</html>
